@@ -44,8 +44,19 @@ async function run() {
 
     // ======= user related Api =========
 
-
-    // ======= service related Api ======
+    // ---- created and send Database user Api ------
+    app.post('/users', async (req, res) => {
+      const user = req.body
+      user.role = 'user'
+      user.creatAt = new Date()
+      const userEmail = user.email
+      const userExist = await userCollection.findOne({email: userEmail})
+      if (userExist) {
+        return res.status(400).send({message: 'User already exists'})
+      }
+      const result = await userCollection.insertOne(user)
+      res.send(result)
+    })
 
 
 

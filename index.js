@@ -33,13 +33,13 @@ async function run() {
 
     //// middleware with database
     const verifyAdmin = async (req, res, next) => {
-        const email = req.decode_email;
-        const query = { email }
-        const user = await userCollection.findOne(query)
-        if (!user || user.role !== 'admin') {
-            return res.status(403).send({ massage: 'forbidden access' })
-        }
-        next()
+      const email = req.decode_email;
+      const query = { email }
+      const user = await userCollection.findOne(query)
+      if (!user || user.role !== 'admin') {
+        return res.status(403).send({ massage: 'forbidden access' })
+      }
+      next()
     }
 
     // ======= user related Api =========
@@ -114,6 +114,25 @@ async function run() {
       const result = await cursor.toArray()
       res.send(result)
     })
+
+    // ===== update service Api =====
+    app.patch('/services/:id', async (req, res) => {
+      const id = req.params.id;
+      const updateData = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: updateData
+        };
+        const result = await serviceCollection.updateOne(filter, updateDoc);
+        res.send(result);
+    });
+    // =============== delete service Api ===============
+    app.delete('/services/:id', async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const result = await serviceCollection.deleteOne(filter);
+      res.send(result);
+    });
 
 
 

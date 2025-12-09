@@ -48,15 +48,53 @@ async function run() {
     app.post('/users', async (req, res) => {
       const user = req.body
       user.role = 'user'
-      user.creatAt = new Date()
+      user.createdAt = new Date()
       const userEmail = user.email
-      const userExist = await userCollection.findOne({email: userEmail})
+      const userExist = await userCollection.findOne({ email: userEmail })
       if (userExist) {
-        return res.status(400).send({message: 'User already exists'})
+        return res.status(400).send({ message: 'User already exists' })
       }
       const result = await userCollection.insertOne(user)
       res.send(result)
     })
+    // Get all users Api -----
+    // app.get('/users', async (req, res) => {
+    //   const users = await userCollection.find().toArray()
+    //   res.send(users)
+    // })
+    // --- Get users info and manage user Api -----
+    app.get("/users", async (req, res) => {
+      try {
+        const searchText = req.query.searchText || "";
+        const sortOrder = req.query.sortOrder || "asc";
+
+        // Search by name or email
+        const filter = {
+          $or: [
+            { name: { $regex: searchText, $options: "i" } },
+            { email: { $regex: searchText, $options: "i" } }
+          ]
+        };
+
+        // Sorting by name (ascending/descending)
+        const sortQuery = sortOrder === "desc" ? { name: -1 } : { name: 1 };
+
+        const users = await userCollection
+          .find(filter)
+          .sort(sortQuery)
+          .toArray();
+
+        res.send(users);
+
+      } catch (error) {
+        res.status(500).send({ message: "Error fetching users", error });
+      }
+    });
+
+
+    // ======= service related Api =========
+    // ---- created and send Database service Api ------
+
 
 
 

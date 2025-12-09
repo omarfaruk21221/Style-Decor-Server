@@ -32,15 +32,15 @@ async function run() {
     const serviceCollection = db.collection("services");
 
     //// middleware with database
-    // const verifyAdmin = async (req, res, next) => {
-    //     const email = req.decode_email;
-    //     const query = { email }
-    //     const user = await userCollection.findOne(query)
-    //     if (!user || user.role !== 'admin') {
-    //         return res.status(403).send({ massage: 'forbidden access' })
-    //     }
-    //     next()
-    // }
+    const verifyAdmin = async (req, res, next) => {
+        const email = req.decode_email;
+        const query = { email }
+        const user = await userCollection.findOne(query)
+        if (!user || user.role !== 'admin') {
+            return res.status(403).send({ massage: 'forbidden access' })
+        }
+        next()
+    }
 
     // ======= user related Api =========
 
@@ -114,6 +114,19 @@ async function run() {
       const result = await cursor.toArray()
       res.send(result)
     })
+
+
+
+
+
+
+
+
+
+
+
+
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");

@@ -100,7 +100,20 @@ async function run() {
       const result = await serviceCollection.insertOne(service)
       res.send(result)
     })
-
+    // ===== get services =========
+    app.get('/services', async (req, res) => {
+      // console.log(res)
+      const query = {}
+      const { email } = req.query
+      // // parcel?email=&name=
+      if (email) {
+        query.senderEmail = email
+      }
+      const options = { sort: { createdAt: -1 } }
+      const cursor = serviceCollection.find(query, options)
+      const result = await cursor.toArray()
+      res.send(result)
+    })
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");

@@ -57,11 +57,6 @@ async function run() {
       const result = await userCollection.insertOne(user)
       res.send(result)
     })
-    // Get all users Api -----
-    // app.get('/users', async (req, res) => {
-    //   const users = await userCollection.find().toArray()
-    //   res.send(users)
-    // })
     // --- Get users info and manage user Api -----
     app.get("/users", async (req, res) => {
       try {
@@ -90,13 +85,21 @@ async function run() {
         res.status(500).send({ message: "Error fetching users", error });
       }
     });
-
+    // --- Get users info and manage user Api -----
+    app.get('/users/:email', async (req, res) => {
+      const email = req.params.email;
+      const user = await userCollection.findOne({ email });
+      res.send({ role: user?.role || 'user' });
+    });
 
     // ======= service related Api =========
     // ---- created and send Database service Api ------
-
-
-
+    app.post('/services', async (req, res) => {
+      const service = req.body
+      service.createdAt = new Date()
+      const result = await serviceCollection.insertOne(service)
+      res.send(result)
+    })
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });

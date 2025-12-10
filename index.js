@@ -4,6 +4,21 @@ const app = express()
 require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000
+const admin = require("firebase-admin");
+const serviceAccount = require("./serviceAccountKey.json");
+
+let isFirebaseInitialized = false;
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount)
+  });
+  isFirebaseInitialized = true;
+  console.log("Firebase Admin Initialized successfully.");
+} catch (error) {
+  console.error("Firebase Admin Initialization Failed:", error.message);
+  // Continue running without Firebase, but auth routes will fail gracefully.
+}
+
 // ----strip =---
 // const stripe = require('stripe')(process.env.STRIPE);
 /// middleware
@@ -12,8 +27,6 @@ app.use(cors())
 
 // ----mongo db data base connection start----
 const uri = process.env.MONGODB_URI
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -32,30 +45,56 @@ async function run() {
     const serviceCollection = db.collection("services");
 
     //// middleware with database
-    const verifyAdmin = async (req, res, next) => {
-      const email = req.decode_email;
-      const query = { email }
-      const user = await userCollection.findOne(query)
-      if (!user || user.role !== 'admin') {
-        return res.status(403).send({ massage: 'forbidden access' })
+    const verifyFBToken = async (req, res, next) => {
+      // console.log('inside verify token', req.headers.authorization);
+      if (!isFirebaseInitialized) {
+        return res.status(503).send({ message: 'Firebase authentication service unavailable. Check server logs.' });
       }
-      next()
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: 'unauthorized access' });
+      }
+      const token = req.headers.authorization.split(' ')[1];
+      try {
+        const decodedUser = await admin.auth().verifyIdToken(token);
+        req.decode_email = decodedUser.email;
+        next();
+      } catch (error) {
+        return res.status(401).send({ message: 'unauthorized access', error });
+      }
+    }
+
+    const verifyAdmin = async (req, res, next) => {
+      try {
+        const email = req.decode_email;
+        const query = { email }
+        const user = await userCollection.findOne(query)
+        if (!user || user.role !== 'admin') {
+          return res.status(403).send({ massage: 'forbidden access' })
+        }
+        next()
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to verify admin', error })
+      }
     }
 
     // ======= user related Api =========
 
     // ---- created and send Database user Api ------
     app.post('/users', async (req, res) => {
-      const user = req.body
-      user.role = 'user'
-      user.createdAt = new Date()
-      const userEmail = user.email
-      const userExist = await userCollection.findOne({ email: userEmail })
-      if (userExist) {
-        return res.status(400).send({ message: 'User already exists' })
+      try {
+        const user = req.body
+        user.role = 'user'
+        user.createdAt = new Date()
+        const userEmail = user.email
+        const userExist = await userCollection.findOne({ email: userEmail })
+        if (userExist) {
+          return res.status(400).send({ message: 'User already exists' })
+        }
+        const result = await userCollection.insertOne(user)
+        res.send(result)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to create user', error })
       }
-      const result = await userCollection.insertOne(user)
-      res.send(result)
     })
     // --- Get users info and manage user Api -----
     app.get("/users", async (req, res) => {
@@ -87,51 +126,99 @@ async function run() {
     });
     // --- Get users info and manage user Api -----
     app.get('/users/:email', async (req, res) => {
-      const email = req.params.email;
-      const user = await userCollection.findOne({ email });
-      res.send({ role: user?.role || 'user' });
+      try {
+        const email = req.params.email;
+        const user = await userCollection.findOne({ email });
+        res.send({ role: user?.role || 'user' });
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch user role', error });
+      }
     });
+    // ------------- updatd user Role -----------------
+    app.patch('/users/:id/role', async (req, res) => {
+      try {
+        const id = req.params.id
+        const roleInfo = req.body
+        const query = { _id: new ObjectId(id) }
+        const updatedDoc = {
+          $set: {
+            role: roleInfo.role
+          }
+        }
+        const result = await userCollection.updateOne(query, updatedDoc)
+        res.send(result)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to update user role', error })
+      }
+    })
 
+    // =================== user deleted api ===========
+    app.delete('/users/:id', async (req, res) => {
+      try {
+        const id = req.params.id
+        const query = { _id: new ObjectId(id) }
+        const result = await userCollection.deleteOne(query)
+        res.send(result)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to delete user', error })
+      }
+    })
     // ======= service related Api =========
     // ---- created and send Database service Api ------
     app.post('/services', async (req, res) => {
-      const service = req.body
-      service.createdAt = new Date()
-      const result = await serviceCollection.insertOne(service)
-      res.send(result)
+      try {
+        const service = req.body
+        service.createdAt = new Date()
+        const result = await serviceCollection.insertOne(service)
+        res.send(result)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to create service', error })
+      }
     })
     // ===== get services =========
     app.get('/services', async (req, res) => {
-      // console.log(res)
-      const query = {}
-      const { email } = req.query
-      // // parcel?email=&name=
-      if (email) {
-        query.senderEmail = email
+      try {
+        // console.log(res)
+        const query = {}
+        const { email } = req.query
+        // // parcel?email=&name=
+        if (email) {
+          query.senderEmail = email
+        }
+        const options = { sort: { createdAt: -1 } }
+        const cursor = serviceCollection.find(query, options)
+        const result = await cursor.toArray()
+        res.send(result)
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch services', error })
       }
-      const options = { sort: { createdAt: -1 } }
-      const cursor = serviceCollection.find(query, options)
-      const result = await cursor.toArray()
-      res.send(result)
     })
 
     // ===== update service Api =====
     app.patch('/services/:id', async (req, res) => {
-      const id = req.params.id;
-      const updateData = req.body;
-      const filter = { _id: new ObjectId(id) };
-      const updateDoc = {
-        $set: updateData
+      try {
+        const id = req.params.id;
+        const updateData = req.body;
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: updateData
         };
         const result = await serviceCollection.updateOne(filter, updateDoc);
         res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to update service', error });
+      }
     });
     // =============== delete service Api ===============
     app.delete('/services/:id', async (req, res) => {
-      const id = req.params.id;
-      const filter = { _id: new ObjectId(id) };
-      const result = await serviceCollection.deleteOne(filter);
-      res.send(result);
+      try {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const result = await serviceCollection.deleteOne(filter);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to delete service', error });
+      }
     });
 
 

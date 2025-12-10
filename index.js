@@ -175,24 +175,39 @@ async function run() {
         res.status(500).send({ message: 'Failed to create service', error })
       }
     })
-    // ===== get services =========
+
+    // ==== get all service =====
     app.get('/services', async (req, res) => {
       try {
-        // console.log(res)
-        const query = {}
-        const { email } = req.query
-        // // parcel?email=&name=
+        let { page = 1, limit = 6, email } = req.query;
+        page = parseInt(page);
+        limit = parseInt(limit);
+        const query = {};
         if (email) {
-          query.senderEmail = email
+          query.senderEmail = email;
         }
-        const options = { sort: { createdAt: -1 } }
-        const cursor = serviceCollection.find(query, options)
-        const result = await cursor.toArray()
-        res.send(result)
+        const total = await serviceCollection.countDocuments(query);
+        const services = await serviceCollection
+          .find(query)
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit)
+          .toArray();
+        res.send({
+          success: true,
+          data: services,
+          meta: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit)
+          }
+        });
       } catch (error) {
-        res.status(500).send({ message: 'Failed to fetch services', error })
+        res.status(500).send({ message: 'Failed to fetch services', error });
       }
-    })
+    });
+
 
     // ===== update service Api =====
     app.patch('/services/:id', async (req, res) => {

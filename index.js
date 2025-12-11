@@ -43,6 +43,7 @@ async function run() {
     const db = client.db("style_decor_DB");
     const userCollection = db.collection("users");
     const serviceCollection = db.collection("services");
+    const bookingCollection = db.collection("bookings");
 
     //// middleware with database
     const verifyFBToken = async (req, res, next) => {
@@ -101,7 +102,6 @@ async function run() {
       try {
         const searchText = req.query.searchText || "";
         const sortOrder = req.query.sortOrder || "asc";
-
         // Search by name or email
         const filter = {
           $or: [
@@ -124,12 +124,21 @@ async function run() {
         res.status(500).send({ message: "Error fetching users", error });
       }
     });
+
+
+    // ============get user by email Api ============
+    // app.get('/users?email', async (req, res) => {
+    //   const email = req.query.email;
+    //   const user = await userCollection.findOne({ email });
+    //   res.send(user);
+
+    // })
     // --- Get users info and manage user Api -----
     app.get('/users/:email', async (req, res) => {
       try {
         const email = req.params.email;
         const user = await userCollection.findOne({ email });
-        res.send({ role: user?.role || 'user' });
+        res.send(user);
       } catch (error) {
         res.status(500).send({ message: 'Failed to fetch user role', error });
       }
@@ -163,6 +172,8 @@ async function run() {
         res.status(500).send({ message: 'Failed to delete user', error })
       }
     })
+
+
     // ======= service related Api =========
     // ---- created and send Database service Api ------
     app.post('/services', async (req, res) => {
@@ -175,13 +186,12 @@ async function run() {
         res.status(500).send({ message: 'Failed to create service', error })
       }
     })
-
     // ==== get all service =====
     app.get('/services', async (req, res) => {
       try {
         let { page = 1, limit = 6, email } = req.query;
-        page = parseInt(page);
-        limit = parseInt(limit);
+        page = parseInt(page) || 1;
+        limit = parseInt(limit) || 6;
         const query = {};
         if (email) {
           query.senderEmail = email;
@@ -207,8 +217,6 @@ async function run() {
         res.status(500).send({ message: 'Failed to fetch services', error });
       }
     });
-
-
     // ===== update service Api =====
     app.patch('/services/:id', async (req, res) => {
       try {
@@ -233,6 +241,76 @@ async function run() {
         res.send(result);
       } catch (error) {
         res.status(500).send({ message: 'Failed to delete service', error });
+      }
+    });
+
+    //  ================ booking related Api ===============
+    app.post('/bookings', async (req, res) => {
+      try {
+        const booking = req.body;
+        const result = await bookingCollection.insertOne(booking);
+        res.send(result);
+      } catch (error) {
+        console.error("Error creating booking:", error);
+        res.status(500).send({ message: 'Failed to create booking', error });
+      }
+    })
+
+    // ============== booking get Api =============
+    app.get('/bookings', async (req, res) => {
+      try {
+        const { email } = req.query;
+        let query = {};
+        if (email) {
+          query = {
+            $or: [
+              { userEmail: email },
+            ]
+          };
+        }
+        const bookings = await bookingCollection.find(query).toArray();
+        res.send(bookings);
+      } catch (error) {
+        console.error("Error fetching bookings:", error);
+        res.status(500).send({ message: 'Failed to fetch bookings', error });
+      }
+    });
+    app.get('/bookings/:email', async (req, res) => {
+      try {
+        const email = req.params.email;
+        const bookings = await bookingCollection.find({ email }).toArray();
+        res.send(bookings);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch bookings', error });
+      }
+    });
+
+    app.delete('/bookings/:id', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await bookingCollection.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to delete booking', error });
+      }
+    });
+
+    app.patch('/bookings/:id', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const updatedBooking = req.body;
+        delete updatedBooking._id;
+
+        const updateDoc = {
+          $set: updatedBooking
+        };
+        const result = await bookingCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (error) {
+        console.error("Error updating booking:", error);
+        res.status(500).send({ message: 'Failed to update booking', error });
       }
     });
 

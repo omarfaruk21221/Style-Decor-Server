@@ -5,15 +5,30 @@ require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000
 const admin = require("firebase-admin");
-const serviceAccount = require("./serviceAccountKey.json");
 
 let isFirebaseInitialized = false;
 try {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount)
-  });
-  isFirebaseInitialized = true;
-  console.log("Firebase Admin Initialized successfully.");
+  // Check if Firebase service account is provided via environment variable (for Vercel)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount)
+    });
+    isFirebaseInitialized = true;
+    console.log("Firebase Admin Initialized successfully from environment variable.");
+  } else {
+    // Try to load from local file (for local development)
+    try {
+      const serviceAccount = require("./serviceAccountKey.json");
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+      });
+      isFirebaseInitialized = true;
+      console.log("Firebase Admin Initialized successfully from local file.");
+    } catch (fileError) {
+      console.warn("Firebase serviceAccountKey.json not found. Firebase auth will be disabled.");
+    }
+  }
 } catch (error) {
   console.error("Firebase Admin Initialization Failed:", error.message);
   // Continue running without Firebase, but auth routes will fail gracefully.

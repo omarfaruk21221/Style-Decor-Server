@@ -5,40 +5,56 @@ require('dotenv').config()
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const port = process.env.PORT || 3000
 const admin = require("firebase-admin");
+const { default: Stripe } = require('stripe');
 
-let isFirebaseInitialized = false;
-try {
-  // Check if Firebase service account is provided via environment variable (for Vercel)
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount)
-    });
-    isFirebaseInitialized = true;
-    console.log("Firebase Admin Initialized successfully from environment variable.");
-  } else {
-    // Try to load from local file (for local development)
-    try {
-      const serviceAccount = require("./serviceAccountKey.json");
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-      });
-      isFirebaseInitialized = true;
-      console.log("Firebase Admin Initialized successfully from local file.");
-    } catch (fileError) {
-      console.warn("Firebase serviceAccountKey.json not found. Firebase auth will be disabled.");
-    }
-  }
-} catch (error) {
-  console.error("Firebase Admin Initialization Failed:", error.message);
-  // Continue running without Firebase, but auth routes will fail gracefully.
-}
+
 
 // ----strip =---
-// const stripe = require('stripe')(process.env.STRIPE);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+
+// ------ firebase admin ---------
+// const serviceAccount = require("./zap-shift-c9e57-firebase.json");
+// admin.initializeApp({
+//   credential: admin.credential.cert(serviceAccount)
+// });
+
+// --genared tokon ---
+// / ---- crypto for tracking id ----
+const crypto = require("crypto");
+
+function generateTrackingId() {
+  const prefix = "PRCL"; // brand prefix
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+  const random = crypto.randomBytes(3).toString("hex").toUpperCase(); // 6-char random hex
+  return `${prefix}-${date}-${random}`;
+}
+
 /// middleware
 app.use(express.json())
 app.use(cors())
+
+
+// const verifyFBToken = async (req, res, next) => {
+//   const token = req.headers.authorization
+//   // console.log('headers in the middleware', token)
+//   if (!token) {
+//     return res.status(401).send({ massage: 'unauthorization access' })
+//   }
+//   try {
+//     const idToken = token.split(" ")[1]
+//     const decode = await admin.auth().verifyIdToken(idToken)
+//     console.log({ decode })
+//     req.decode_email = decode.email
+//     next()
+//   }
+//   catch (err) {
+//     return res.status(401).send({ massage: "unathorized access!!" })
+//   }
+//   // const tol
+
+
+// }
 
 // ----mongo db data base connection start----
 const uri = process.env.MONGODB_URI
@@ -59,6 +75,7 @@ async function run() {
     const userCollection = db.collection("users");
     const serviceCollection = db.collection("services");
     const bookingCollection = db.collection("bookings");
+    const paymentCollection = db.collection("payments");
 
     //// middleware with database
     const verifyFBToken = async (req, res, next) => {
@@ -272,6 +289,8 @@ async function run() {
     })
 
     // ============== booking get Api =============
+
+    // ======== booking get email query use ============
     app.get('/bookings', async (req, res) => {
       try {
         const { email } = req.query;
@@ -290,10 +309,11 @@ async function run() {
         res.status(500).send({ message: 'Failed to fetch bookings', error });
       }
     });
-    app.get('/bookings/:email', async (req, res) => {
+    app.get('/bookings/:id', async (req, res) => {
       try {
-        const email = req.params.email;
-        const bookings = await bookingCollection.find({ email }).toArray();
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) }
+        const bookings = await bookingCollection.findOne(query);
         res.send(bookings);
       } catch (error) {
         res.status(500).send({ message: 'Failed to fetch bookings', error });
@@ -329,8 +349,105 @@ async function run() {
       }
     });
 
+    // ==================== payment   apis ================
+    // post payment data into database and create checkout session
+    app.post("/create-checkout-session", async (req, res) => {
+      try {
+        const { price, bookingId, serviceId, serviceName, userEmail } = req.body;
+        console.log("Received payment info:", req.body);
+
+        const amountInCents = Math.round(price * 100);
+
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: serviceName,
+                  metadata: { bookingId, serviceId, userEmail },
+                },
+                unit_amount: amountInCents,
+              },
+              quantity: 1,
+            },
+          ],
+          mode: "payment",
+          success_url: `${process.env.CLIENT_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.CLIENT_URL}/dashboard/payment-cancel`,
+          metadata: { bookingId, serviceId, userEmail },
+        });
+
+        console.log("Stripe session created:", session.url);
+        res.status(200).json({ url: session.url });
+      } catch (error) {
+        console.error("Stripe session creation error:", error);
+        res.status(500).json({ message: error.message });
+      }
+    });
 
 
+    app.patch('/payment-success', async (req, res) => {
+      try {
+        const sessionId = req.query.session_id;
+        const session = await stripe.checkout.sessions.retrieve(sessionId);
+        const trackingId = generateTrackingId();
+
+        const transactionalId = session.payment_intent;
+        const existingPayment = await paymentCollection.findOne({ transactionalId });
+        if (existingPayment) {
+          return res.send({
+            message: 'Payment already exists',
+            transactionalId,
+            trackingId: existingPayment.trackingId
+          });
+        }
+
+        if (session.payment_status === 'paid') {
+          const bookingId = session.metadata.bookingId;
+          await bookingCollection.updateOne(
+            { _id: new ObjectId(bookingId) },
+            { $set: { paymentStatus: 'paid', deliveryStatus: 'pending-pickup', trackingId } }
+          );
+
+          const paymentData = {
+            customerEmail: session.customer_email,
+            currency: session.currency,
+            amount: session.amount_total / 100,
+            paymentStatus: session.payment_status,
+            bookingId,
+            serviceId: session.metadata.serviceId,
+            serviceName: session.metadata.serviceName,
+            transactionalId,
+            trackingId,
+            paidAt: new Date()
+          };
+
+          const paymentResult = await paymentCollection.insertOne(paymentData);
+
+          return res.send({
+            success: true,
+            trackingId,
+            transactionalId,
+            paymentInfo: paymentResult
+          });
+        }
+
+        res.send({ success: false });
+      } catch (error) {
+        res.status(500).send({ message: 'Payment success handling failed', error });
+      }
+    });
+
+    app.get('/payments', async (req, res) => {
+      try {
+        const payments = await paymentCollection.find().toArray();
+        res.send(payments);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch payments', error });
+      }
+    });
 
 
 
@@ -344,6 +461,25 @@ async function run() {
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
+
+    // 404 Error Handler to ensure no 404 errors are returned blindly (Handle all unhandled routes)
+    app.use((req, res) => {
+      res.status(404).send({
+        success: false,
+        message: "Route Not Found",
+        status: 404
+      });
+    });
+
+    // Global Error Handler
+    app.use((err, req, res, next) => {
+      console.error("Global Error:", err);
+      res.status(err.status || 500).send({
+        success: false,
+        message: err.message || "Internal Server Error",
+        error: err
+      });
+    });
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();

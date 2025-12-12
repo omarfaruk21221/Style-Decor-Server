@@ -353,7 +353,7 @@ async function run() {
     // post payment data into database and create checkout session
     app.post("/create-checkout-session", async (req, res) => {
       try {
-        const { price, bookingId, serviceId, serviceName, userEmail } = req.body;
+        const { price, bookingId, serviceId, serviceName, userEmail, serviceImage } = req.body;
         console.log("Received payment info:", req.body);
 
         const amountInCents = Math.round(price * 100);
@@ -366,7 +366,7 @@ async function run() {
                 currency: "usd",
                 product_data: {
                   name: serviceName,
-                  metadata: { bookingId, serviceId, userEmail },
+                  metadata: { bookingId, serviceId,serviceName, serviceImage, userEmail },
                 },
                 unit_amount: amountInCents,
               },
@@ -376,7 +376,7 @@ async function run() {
           mode: "payment",
           success_url: `${process.env.CLIENT_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${process.env.CLIENT_URL}/dashboard/payment-cancel`,
-          metadata: { bookingId, serviceId, userEmail },
+          metadata: { bookingId, serviceId,serviceName,serviceName, serviceImage,userEmail },
         });
 
         console.log("Stripe session created:", session.url);
@@ -395,46 +395,53 @@ async function run() {
         const trackingId = generateTrackingId();
 
         const transactionalId = session.payment_intent;
-        const existingPayment = await paymentCollection.findOne({ transactionalId });
-        if (existingPayment) {
-          return res.send({
-            message: 'Payment already exists',
-            transactionalId,
-            trackingId: existingPayment.trackingId
-          });
-        }
 
-        if (session.payment_status === 'paid') {
+        // --- Atomic check and insert for payment ---
+        const filter = { transactionalId };
+        const update = {
+          $setOnInsert: {
+            customerEmail: session.metadata.userEmail,
+            currency: session.currency,
+            amount: session.amount_total / 100,
+            paymentStatus: session.payment_status,
+            bookingId: session.metadata.bookingId,
+            serviceId: session.metadata.serviceId,
+            serviceName: session.metadata.serviceName,
+            serviceImage: session.metadata.serviceImage,
+            transactionalId,
+            trackingId,
+            paidAt: new Date().toLocaleDateString()
+          }
+        };
+
+        const options = { upsert: true, returnDocument: 'after' };
+        const paymentResult = await paymentCollection.findOneAndUpdate(filter, update, options);
+
+        // --- Check if payment was already inserted ---
+        if (!paymentResult.lastErrorObject?.updatedExisting) {
+          // Payment was inserted now, update booking
           const bookingId = session.metadata.bookingId;
           await bookingCollection.updateOne(
             { _id: new ObjectId(bookingId) },
             { $set: { paymentStatus: 'paid', deliveryStatus: 'pending-pickup', trackingId } }
           );
 
-          const paymentData = {
-            customerEmail: session.customer_email,
-            currency: session.currency,
-            amount: session.amount_total / 100,
-            paymentStatus: session.payment_status,
-            bookingId,
-            serviceId: session.metadata.serviceId,
-            serviceName: session.metadata.serviceName,
-            transactionalId,
-            trackingId,
-            paidAt: new Date()
-          };
-
-          const paymentResult = await paymentCollection.insertOne(paymentData);
-
           return res.send({
             success: true,
             trackingId,
             transactionalId,
-            paymentInfo: paymentResult
+            paymentInfo: paymentResult.value
+          });
+        } else {
+          // Payment already exists
+          return res.send({
+            success: false,
+            message: 'Payment already exists',
+            trackingId: paymentResult.value.trackingId,
+            transactionalId
           });
         }
 
-        res.send({ success: false });
       } catch (error) {
         res.status(500).send({ message: 'Payment success handling failed', error });
       }

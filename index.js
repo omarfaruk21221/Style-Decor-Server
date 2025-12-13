@@ -219,36 +219,56 @@ async function run() {
       }
     })
     // ==== get all service =====
-    app.get('/services', async (req, res) => {
-      try {
-        let { page = 1, limit = 6, email } = req.query;
-        page = parseInt(page) || 1;
-        limit = parseInt(limit) || 6;
-        const query = {};
-        if (email) {
-          query.senderEmail = email;
-        }
-        const total = await serviceCollection.countDocuments(query);
-        const services = await serviceCollection
-          .find(query)
-          .sort({ createdAt: -1 })
-          .skip((page - 1) * limit)
-          .limit(limit)
-          .toArray();
-        res.send({
-          success: true,
-          data: services,
-          meta: {
-            total,
-            page,
-            limit,
-            totalPages: Math.ceil(total / limit)
-          }
-        });
-      } catch (error) {
-        res.status(500).send({ message: 'Failed to fetch services', error });
-      }
-    });
+// app.get('/services', async (req, res) => {
+//   try {
+//     let { page = 1, limit = 6, email } = req.query;
+
+//     page = parseInt(page);
+//     limit = parseInt(limit);
+
+//     const query = {};
+//     if (email) {
+//       query.createdByEmail = email;
+//     }
+
+//     const total = await serviceCollection.countDocuments(query);
+
+//     const services = await serviceCollection
+//       .find(query)
+//       .sort({ createdAt: -1 })
+//       .skip((page - 1) * limit)
+//       .limit(limit)
+//       .toArray();
+
+//     res.send({
+//       success: true,
+//       data: services,
+//       meta: {
+//         total,
+//         page,
+//         limit,
+//         totalPages: Math.ceil(total / limit),
+//       },
+//     });
+//   } catch (error) {
+//     res.status(500).send({
+//       success: false,
+//       message: 'Failed to fetch services',
+//       error,
+//     });
+//   }
+// });
+app.get('/services', async (req, res) => {
+  try {
+    const cursor = serviceCollection.find().sort({ createdAt: -1 })
+    const services = await cursor.toArray();
+    res.send(services);
+  } catch (error) {
+    res.status(500).send({ message: 'Failed to fetch services', error });
+  }
+});
+
+
     // ===== update service Api =====
     app.patch('/services/:id', async (req, res) => {
       try {
@@ -366,7 +386,7 @@ async function run() {
                 currency: "usd",
                 product_data: {
                   name: serviceName,
-                  metadata: { bookingId, serviceId,serviceName, serviceImage, userEmail },
+                  metadata: { bookingId, serviceId, serviceName, serviceImage, userEmail },
                 },
                 unit_amount: amountInCents,
               },
@@ -376,7 +396,7 @@ async function run() {
           mode: "payment",
           success_url: `${process.env.CLIENT_URL}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
           cancel_url: `${process.env.CLIENT_URL}/dashboard/payment-cancel`,
-          metadata: { bookingId, serviceId,serviceName,serviceName, serviceImage,userEmail },
+          metadata: { bookingId, serviceId, serviceName, serviceName, serviceImage, userEmail },
         });
 
         console.log("Stripe session created:", session.url);
@@ -447,14 +467,16 @@ async function run() {
       }
     });
 
-    app.get('/payments', async (req, res) => {
-      try {
-        const payments = await paymentCollection.find().toArray();
-        res.send(payments);
-      } catch (error) {
-        res.status(500).send({ message: 'Failed to fetch payments', error });
-      }
-    });
+ app.get('/payments', async (req, res) => {
+  try {
+    const { email } = req.query;
+    const query = email ? { customerEmail: email } : {};
+    const payments = await paymentCollection.find(query).sort({ paidAt: -1 }).toArray();
+    res.send(payments);
+  } catch (error) {
+    res.status(500).send({ message: 'Failed to fetch payments', error });
+  }
+});
 
 
 

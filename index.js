@@ -165,6 +165,17 @@ async function run() {
     //   res.send(user);
 
     // })
+    // filter user  api (get active decorators)
+    app.get('/users/active-decorators', async (req, res) => {
+      try {
+        const query = { role: 'decorator', status: 'active' };
+        const decorators = await userCollection.find(query).toArray();
+        res.send(decorators);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to fetch active decorators", error });
+      }
+    });
+
     // --- Get users info and manage user Api -----
     app.get('/users/:email', async (req, res) => {
       try {
@@ -183,7 +194,8 @@ async function run() {
         const query = { _id: new ObjectId(id) }
         const updatedDoc = {
           $set: {
-            role: roleInfo.role
+            role: roleInfo.role,
+            status:"active"
           }
         }
         const result = await userCollection.updateOne(query, updatedDoc)
@@ -219,54 +231,55 @@ async function run() {
       }
     })
     // ==== get all service =====
-// app.get('/services', async (req, res) => {
-//   try {
-//     let { page = 1, limit = 6, email } = req.query;
+    // app.get('/services', async (req, res) => {
+    //   try {
+    //     let { page = 1, limit = 6, email } = req.query;
 
-//     page = parseInt(page);
-//     limit = parseInt(limit);
+    //     page = parseInt(page);
+    //     limit = parseInt(limit);
 
-//     const query = {};
-//     if (email) {
-//       query.createdByEmail = email;
-//     }
+    //     const query = {};
+    //     if (email) {
+    //       query.createdByEmail = email;
+    //     }
 
-//     const total = await serviceCollection.countDocuments(query);
+    //     const total = await serviceCollection.countDocuments(query);
 
-//     const services = await serviceCollection
-//       .find(query)
-//       .sort({ createdAt: -1 })
-//       .skip((page - 1) * limit)
-//       .limit(limit)
-//       .toArray();
+    //     const services = await serviceCollection
+    //       .find(query)
+    //       .sort({ createdAt: -1 })
+    //       .skip((page - 1) * limit)
+    //       .limit(limit)
+    //       .toArray();
 
-//     res.send({
-//       success: true,
-//       data: services,
-//       meta: {
-//         total,
-//         page,
-//         limit,
-//         totalPages: Math.ceil(total / limit),
-//       },
-//     });
-//   } catch (error) {
-//     res.status(500).send({
-//       success: false,
-//       message: 'Failed to fetch services',
-//       error,
-//     });
-//   }
-// });
-app.get('/services', async (req, res) => {
-  try {
-    const cursor = serviceCollection.find().sort({ createdAt: -1 })
-    const services = await cursor.toArray();
-    res.send(services);
-  } catch (error) {
-    res.status(500).send({ message: 'Failed to fetch services', error });
-  }
-});
+    //     res.send({
+    //       success: true,
+    //       data: services,
+    //       meta: {
+    //         total,
+    //         page,
+    //         limit,
+    //         totalPages: Math.ceil(total / limit),
+    //       },
+    //     });
+    //   } catch (error) {
+    //     res.status(500).send({
+    //       success: false,
+    //       message: 'Failed to fetch services',
+    //       error,
+    //     });
+    //   }
+    // });
+    app.get('/services', async (req, res) => {
+      try {
+        const cursor = serviceCollection.find().sort({ createdAt: -1 })
+        const services = await cursor.toArray();
+        res.send(services);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch services', error });
+      }
+    });
+    //  ===========paid bookings api ===========
 
 
     // ===== update service Api =====
@@ -467,16 +480,16 @@ app.get('/services', async (req, res) => {
       }
     });
 
- app.get('/payments', async (req, res) => {
-  try {
-    const { email } = req.query;
-    const query = email ? { customerEmail: email } : {};
-    const payments = await paymentCollection.find(query).sort({ paidAt: -1 }).toArray();
-    res.send(payments);
-  } catch (error) {
-    res.status(500).send({ message: 'Failed to fetch payments', error });
-  }
-});
+    app.get('/payments', async (req, res) => {
+      try {
+        const { email } = req.query;
+        const query = email ? { customerEmail: email } : {};
+        const payments = await paymentCollection.find(query).sort({ paidAt: -1 }).toArray();
+        res.send(payments);
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to fetch payments', error });
+      }
+    });
 
 
 

@@ -195,7 +195,7 @@ async function run() {
         const updatedDoc = {
           $set: {
             role: roleInfo.role,
-            status:"active"
+            status: "active"
           }
         }
         const result = await userCollection.updateOne(query, updatedDoc)
@@ -326,14 +326,21 @@ async function run() {
     // ======== booking get email query use ============
     app.get('/bookings', async (req, res) => {
       try {
-        const { email } = req.query;
+        const { email, paymentStatus, deliveryStatus } = req.query;
+
         let query = {};
+
+        // user specific
         if (email) {
-          query = {
-            $or: [
-              { userEmail: email },
-            ]
-          };
+          query.userEmail = email;
+        }
+        // paid / unpaid
+        if (paymentStatus) {
+          query.paymentStatus = paymentStatus; // 'paid'
+        }
+        // optional (admin / decorator use)
+        if (deliveryStatus) {
+          query.deliveryStatus = { $exists: true };
         }
         const bookings = await bookingCollection.find(query).toArray();
         res.send(bookings);
@@ -381,6 +388,42 @@ async function run() {
         res.status(500).send({ message: 'Failed to update booking', error });
       }
     });
+    // ============ update booking asign decoretor api ==================
+    // Assign decorator endpoint
+    app.patch('/bookings/:id/assign-decorator', async (req, res) => {
+      try {
+        const bookingId = req.params.id;
+        const { decoratorId, decoratorName, decoratorEmail, deliveryStatus } = req.body;
+
+        if (!decoratorId || !decoratorName || !decoratorEmail) {
+          return res.status(400).send({ message: 'Decorator info missing' });
+        }
+        // Update booking
+        const bookingQuery = { _id: new ObjectId(bookingId) };
+        const bookingUpdateDoc = {
+          $set: {
+            assignedDecorator: {
+              decoratorId,
+              decoratorName,
+              decoratorEmail,
+              assignedAt: new Date()
+            },
+            deliveryStatus: deliveryStatus || 'assigned',
+          },
+        };
+        const bookingResult = await bookingCollection.updateOne(bookingQuery, bookingUpdateDoc);
+
+        // Update decorator status
+        const decoratorQuery = { _id: new ObjectId(decoratorId) };
+        const decoratorUpdateDoc = { $set: { status: 'assigned' } };
+        const decoratorResult = await userCollection.updateOne(decoratorQuery, decoratorUpdateDoc);
+
+        res.send({ success: true, bookingResult, decoratorResult });
+      } catch (error) {
+        res.status(500).send({ message: 'Failed to assign decorator', error });
+      }
+    });
+
 
     // ==================== payment   apis ================
     // post payment data into database and create checkout session
@@ -456,7 +499,7 @@ async function run() {
           const bookingId = session.metadata.bookingId;
           await bookingCollection.updateOne(
             { _id: new ObjectId(bookingId) },
-            { $set: { paymentStatus: 'paid', deliveryStatus: 'pending-pickup', trackingId } }
+            { $set: { paymentStatus: 'paid',deliveryStatus: 'pending-pickup', trackingId } }
           );
 
           return res.send({

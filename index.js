@@ -416,20 +416,65 @@ app.patch('/bookings/:id/assign-decorator', async (req, res) => {
     res.status(500).send({ message: 'Failed to assign decorator', error });
   }
 });
-// -------------- accept decorator --------------
-app.patch('/bookings/:id/decorator-accept', async (req, res) => {
+// -------------- action decorator --------------
+app.patch('/bookings/:id/decorator-action', async (req, res) => {
   try {
-    const id = req.params.id;
-    const query = { _id: new ObjectId(id) };
-    const updateDoc = {
-      $set: { deliveryStatus: 'accepted-decorator' }
-    };
-    const result = await req.bookingCollection.updateOne(query, updateDoc);
-    res.send(result);
+    const bookingId = req.params.id;
+    const { action } = req.query;
+    const query = { _id: new ObjectId(bookingId) };
+
+    const booking = await req.bookingCollection.findOne(query);
+    if (!booking) {
+      return res.status(404).send({ message: 'Booking not found' });
+    }
+
+    const decoratorId = booking.assignedDecorator?.decoratorId;
+    if (!decoratorId) {
+      return res.status(400).send({ message: 'No decorator assigned to this booking' });
+    }
+
+    const decoratorQuery = { _id: new ObjectId(decoratorId) };
+    let bookingUpdateDoc = {};
+    let decoratorUpdateDoc = {};
+
+    if (action === 'accept') {
+      bookingUpdateDoc = {
+        $set: {
+          deliveryStatus: 'accepted-decorator',
+          acceptedAt: new Date()
+        }
+      };
+      decoratorUpdateDoc = {
+        $set: { status: 'accepted-service' }
+      };
+    } else if (action === 'complete') {
+      const price = parseFloat(booking.price) || 0;
+      const decoratorCost = price * 0.10;
+
+      bookingUpdateDoc = {
+        $set: {
+          deliveryStatus: 'completed',
+          completedAt: new Date(),
+          decoratorCost: decoratorCost
+        }
+      };
+      decoratorUpdateDoc = {
+        $set: { status: 'active' }
+      };
+    } else {
+      return res.status(400).send({ message: 'Invalid action' });
+    }
+
+    const bookingResult = await req.bookingCollection.updateOne(query, bookingUpdateDoc);
+    const decoratorResult = await req.userCollection.updateOne(decoratorQuery, decoratorUpdateDoc);
+
+    res.send({ success: true, bookingResult, decoratorResult });
   } catch (error) {
-    res.status(500).send({ message: 'Failed to accept booking', error });
+    console.error("Decorator action error:", error);
+    res.status(500).send({ success: false, message: 'Failed to update booking', error: error.message });
   }
 });
+
 // Payment
 app.post("/create-checkout-session", async (req, res) => {
   try {

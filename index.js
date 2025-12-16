@@ -320,9 +320,7 @@ async function run() {
         res.status(500).send({ message: 'Failed to create booking', error });
       }
     })
-
     // ============== booking get Api =============
-
     // ======== booking get email query use ============
     app.get('/bookings', async (req, res) => {
       try {

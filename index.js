@@ -416,7 +416,20 @@ app.patch('/bookings/:id/assign-decorator', async (req, res) => {
     res.status(500).send({ message: 'Failed to assign decorator', error });
   }
 });
-
+// -------------- accept decorator --------------
+app.patch('/bookings/:id/decorator-accept', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const updateDoc = {
+      $set: { deliveryStatus: 'accepted-decorator' }
+    };
+    const result = await req.bookingCollection.updateOne(query, updateDoc);
+    res.send(result);
+  } catch (error) {
+    res.status(500).send({ message: 'Failed to accept booking', error });
+  }
+});
 // Payment
 app.post("/create-checkout-session", async (req, res) => {
   try {

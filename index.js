@@ -420,6 +420,11 @@ app.patch('/bookings/:id/decorator-action', async (req, res) => {
   try {
     const bookingId = req.params.id;
     const { action } = req.query;
+
+    if (!ObjectId.isValid(bookingId)) {
+      return res.status(400).send({ message: 'Invalid booking ID format' });
+    }
+
     const query = { _id: new ObjectId(bookingId) };
 
     const booking = await req.bookingCollection.findOne(query);
@@ -430,6 +435,10 @@ app.patch('/bookings/:id/decorator-action', async (req, res) => {
     const decoratorId = booking?.decoratorId;
     if (!decoratorId) {
       return res.status(400).send({ message: 'No decorator assigned to this booking' });
+    }
+
+    if (!ObjectId.isValid(decoratorId)) {
+      return res.status(400).send({ message: 'Invalid decorator ID associated with booking' });
     }
 
     const decoratorQuery = { _id: new ObjectId(decoratorId) };
@@ -446,9 +455,10 @@ app.patch('/bookings/:id/decorator-action', async (req, res) => {
       decoratorUpdateDoc = {
         $set: { status: 'accepted-service' }
       };
-    } else if (action === 'complete') {
-      const price = parseFloat(booking.price) || 0;
-      const decoratorCost = price * 0.10;
+    } else if (action === 'completed') {
+      const price = parseFloat(booking.price);
+      const safePrice = isNaN(price) ? 0 : price;
+      const decoratorCost = safePrice * 0.10;
 
       bookingUpdateDoc = {
         $set: {
@@ -461,7 +471,7 @@ app.patch('/bookings/:id/decorator-action', async (req, res) => {
         $set: { status: 'active' }
       };
     } else {
-      return res.status(400).send({ message: 'Invalid action' });
+      return res.status(400).send({ message: 'Invalid action. Supported actions: accept, completed' });
     }
 
     const bookingResult = await req.bookingCollection.updateOne(query, bookingUpdateDoc);

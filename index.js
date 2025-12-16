@@ -396,12 +396,11 @@ app.patch('/bookings/:id/assign-decorator', async (req, res) => {
     const bookingQuery = { _id: new ObjectId(bookingId) };
     const bookingUpdateDoc = {
       $set: {
-        assignedDecorator: {
-          decoratorId,
-          decoratorName,
-          decoratorEmail,
-          assignedAt: new Date()
-        },
+        decoratorId,
+        decoratorName,
+        decoratorEmail,
+        assignedAt: new Date(),
+
         deliveryStatus: deliveryStatus || 'assigned',
       },
     };
@@ -428,7 +427,7 @@ app.patch('/bookings/:id/decorator-action', async (req, res) => {
       return res.status(404).send({ message: 'Booking not found' });
     }
 
-    const decoratorId = booking.assignedDecorator?.decoratorId;
+    const decoratorId = booking?.decoratorId;
     if (!decoratorId) {
       return res.status(400).send({ message: 'No decorator assigned to this booking' });
     }

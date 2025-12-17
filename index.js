@@ -314,7 +314,7 @@ app.get('/bookings', async (req, res) => {
 
     if (email) query.userEmail = email;
     if (paymentStatus) query.paymentStatus = paymentStatus;
-    if (deliveryStatus) query.deliveryStatus = { $exists: true };
+    if (deliveryStatus) query.deliveryStatus = deliveryStatus;
 
     const bookings = await req.bookingCollection.find(query).toArray();
     res.send(bookings);
@@ -324,26 +324,10 @@ app.get('/bookings', async (req, res) => {
   }
 });
 
-// ============= bookings by decorator email===============
-// ============= bookings by decorator email ===============
-app.get('/bookings/decorator/:email', async (req, res) => {
-  try {
-    const email = req.params.email;
-    const query = { decoratorEmail: email };
 
-    const bookings = await req.bookingCollection
-      .find(query)
-      .toArray();
 
-    res.send(bookings);
-  } catch (error) {
-    console.error("Error fetching bookings by decorator email:", error);
-    res.status(500).send({
-      message: 'Failed to fetch bookings by decorator email',
-      error
-    });
-  }
-});
+
+
 
 
 app.get('/bookings/:id', async (req, res) => {

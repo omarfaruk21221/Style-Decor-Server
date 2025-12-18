@@ -1,6 +1,6 @@
 # ✨ Style Decor - Premium Interior & Event Decoration Platform
 
-![Style Decor Banner](https://raw.githubusercontent.com/omarfaruk21221/Style-Decor-Server/main/banner.png)
+![Style Decor Banner](https://i.ibb.co/fYfgJ66M/Screenshot-2025-12-18-130028.png)
 *Note: Replace the banner link with your actual hosted image if needed.*
 
 **Style Decor** is a comprehensive platform designed to connect clients with professional decorators. Whether it's for luxury interior design or grand event decorations, our platform provides a seamless experience for booking, management, and secure payments.

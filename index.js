@@ -127,7 +127,7 @@ async function run() {
       }
     });
 
-    app.get('/users/active-decorators', async (req, res) => {
+    app.get('/users/active-decorators', verifyFBToken, async (req, res) => {
       try {
         const query = { role: 'decorator', status: 'active' };
         const decorators = await userCollection.find(query).toArray();
@@ -147,7 +147,7 @@ async function run() {
       }
     });
 
-    app.patch('/users/:id/role', async (req, res) => {
+    app.patch('/users/:id/role', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         const roleInfo = req.body;
@@ -165,7 +165,7 @@ async function run() {
       }
     });
 
-    app.delete('/users/:id', async (req, res) => {
+    app.delete('/users/:id', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
@@ -177,7 +177,7 @@ async function run() {
     });
 
     // Services
-    app.post('/services', async (req, res) => {
+    app.post('/services', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const service = req.body;
         service.createdAt = new Date();
@@ -198,7 +198,7 @@ async function run() {
       }
     });
 
-    app.patch('/services/:id', async (req, res) => {
+    app.patch('/services/:id', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         const updateData = req.body;
@@ -211,7 +211,7 @@ async function run() {
       }
     });
 
-    app.delete('/services/:id', async (req, res) => {
+    app.delete('/services/:id', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         const filter = { _id: new ObjectId(id) };
@@ -224,7 +224,7 @@ async function run() {
 
     // ============ Bookings related APIS==========================
     // --------create booking -------------
-    app.post('/bookings', async (req, res) => {
+    app.post('/bookings', verifyFBToken, async (req, res) => {
       try {
         const booking = req.body;
         const result = await bookingCollection.insertOne(booking);
@@ -235,7 +235,7 @@ async function run() {
       }
     });
     // --------get booking by email ans quert--------------------
-    app.get('/bookings', async (req, res) => {
+    app.get('/bookings', verifyFBToken, async (req, res) => {
       try {
         const { email, paymentStatus, deliveryStatus } = req.query;
         let query = {};
@@ -253,7 +253,7 @@ async function run() {
     });
     // ==-----get booking just delivary complated for admin --------------
     // --------get booking by email and query--------------------
-    app.get('/bookings', async (req, res) => {
+    app.get('/bookings', verifyFBToken, async (req, res) => {
       try {
         const { deliveryStatus } = req.query;
         let query = {};
@@ -267,7 +267,7 @@ async function run() {
     });
 
     // --------get booking by id for t--------------------
-    app.get('/bookings/:id', async (req, res) => {
+    app.get('/bookings/:id', verifyFBToken, async (req, res) => {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
@@ -314,7 +314,7 @@ async function run() {
 
 
     // --------deleted booking ------
-    app.delete('/bookings/:id', async (req, res) => {
+    app.delete('/bookings/:id', verifyFBToken, async (req, res) => {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
@@ -325,7 +325,7 @@ async function run() {
       }
     });
     // ------------update booking by id -------------
-    app.patch('/bookings/:id', async (req, res) => {
+    app.patch('/bookings/:id', verifyFBToken, async (req, res) => {
       try {
         const id = req.params.id;
         const filter = { _id: new ObjectId(id) };
